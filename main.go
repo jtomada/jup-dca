@@ -7,35 +7,34 @@ import (
 	"net/url"
 )
 
-type Routes struct {
-	Routes []Route
-}
-
-type Route struct {
-	InAmount              float64
-	OutAmount             float64
-	OutAmountWithSlippage float64
-	PriceImpactPct        float64
-	MarketInfos           []MarketInfo
-}
-
-type MarketInfo struct {
-	Id                 string
-	Label              string
-	InputMint          string
-	OutputMint         string
-	NotEnoughLiquidity bool
-	InAmount           float64
-	OutAmount          float64
-	PriceImpactPct     float64
-	LpFee              Fee
-	PlatformFee        Fee
-}
-
-type Fee struct {
-	Amount float64
-	Mint   string
-	Pct    float64
+type Quote struct {
+	Data []struct {
+		InAmount              int `json:"inAmount"`
+		OutAmount             int `json:"outAmount"`
+		OutAmountWithSlippage int `json:"outAmountWithSlippage"`
+		PriceImpactPct        int `json:"priceImpactPct"`
+		MarketInfos           []struct {
+			ID                 string `json:"id"`
+			Label              string `json:"label"`
+			InputMint          string `json:"inputMint"`
+			OutputMint         string `json:"outputMint"`
+			NotEnoughLiquidity bool   `json:"notEnoughLiquidity"`
+			InAmount           int    `json:"inAmount"`
+			OutAmount          int    `json:"outAmount"`
+			PriceImpactPct     int    `json:"priceImpactPct"`
+			LpFee              struct {
+				Amount int     `json:"amount"`
+				Mint   string  `json:"mint"`
+				Pct    float64 `json:"pct"`
+			} `json:"lpFee"`
+			PlatformFee struct {
+				Amount int     `json:"amount"`
+				Mint   string  `json:"mint"`
+				Pct    float64 `json:"pct"`
+			} `json:"platformFee"`
+		} `json:"marketInfos"`
+	} `json:"data"`
+	TimeTaken float64 `json:"timeTaken"`
 }
 
 func main() {
@@ -62,11 +61,11 @@ func main() {
 	}
 	defer resp.Body.Close()
 
-	var j interface{}
+	j := Quote{}
 	err = json.NewDecoder(resp.Body).Decode(&j)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("%s", j)
+	fmt.Printf("%+v\n", j)
 }
