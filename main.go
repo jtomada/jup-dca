@@ -34,7 +34,7 @@ type SwapResponse struct {
 }
 
 type Quote struct {
-	Data      []Route `json:"data"`
+	Routes    []Route `json:"data"`
 	TimeTaken float64 `json:"timeTaken"`
 }
 
@@ -114,22 +114,25 @@ func main() {
 	fmt.Printf("%+v\n", j)
 
 	swapUrl := "https://quote-api.jup.ag/v1/swap"
+
 	sr := SwapRequest{}
-	sr.Route = j.Data[0]
+	sr.Route = j.Routes[0]
 	sr.UserPublicKey = wallet.PublicKey().String()
-	srj, err := json.Marshal(sr)
-	req, err := http.NewRequest("POST", swapUrl, bytes.NewBuffer(srj))
-	req.Header.Set("X-Custom-Header", "myvalue")
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	postresp, err := client.Do(req)
+
+	var swapJsonBody bytes.Buffer
+	err = json.NewEncoder(&swapJsonBody).Encode(&sr)
 	if err != nil {
 		panic(err)
 	}
-	defer postresp.Body.Close()
+
+	resp, err = http.Post(swapUrl, "application/json", &swapJsonBody)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
 
 	p := SwapResponse{}
-	err = json.NewDecoder(postresp.Body).Decode(&p)
+	err = json.NewDecoder(resp.Body).Decode(&p)
 	if err != nil {
 		panic(err)
 	}
