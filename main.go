@@ -74,13 +74,16 @@ func main() {
 	}
 	envWallet := os.Getenv("WALLET_PRIVATE_KEY")
 
-	endpoint := rpc.MainNetBeta_RPC
-	rpcClient := rpc.New(endpoint)
+	rpcClient := rpc.New(rpc.MainNetBeta_RPC)
 	wsClient, err := ws.Connect(context.Background(), rpc.MainNetBeta_WS)
 	if err != nil {
 		panic(err)
 	}
-	wallet := solana.MustPrivateKeyFromBase58(envWallet)
+
+	wallet, err := solana.PrivateKeyFromSolanaKeygenFile(envWallet)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println("wallet public key:", wallet.PublicKey().String())
 
 	// Get the best routes from Jupiter's Swap API
@@ -95,8 +98,7 @@ func main() {
 	params.Add("inputMint", "So11111111111111111111111111111111111111112")
 	params.Add("outputMint", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
 	params.Add("amount", "1000")
-	params.Add("slippage", "1")
-	//params.Add("onlyDirectRoutes", "true")
+	params.Add("slippage", "0.5")
 	quoteUrl.RawQuery = params.Encode()
 	fmt.Printf("Encoded URL is %q\n", quoteUrl.String())
 
@@ -131,6 +133,7 @@ func main() {
 		panic(err)
 	}
 	defer resp.Body.Close()
+	fmt.Println("swapResp:", resp.Body)
 
 	swapResp := SwapResponse{}
 	err = json.NewDecoder(resp.Body).Decode(&swapResp)
