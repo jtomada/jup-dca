@@ -83,6 +83,7 @@ func main() {
 	wallet := solana.MustPrivateKeyFromBase58(envWallet)
 	fmt.Println("wallet public key:", wallet.PublicKey().String())
 
+	// Get the best routes from Jupiter's Swap API
 	quoteUrl, err := url.Parse("https://quote-api.jup.ag")
 	if err != nil {
 		panic(err)
@@ -96,7 +97,6 @@ func main() {
 	params.Add("amount", "1")
 	params.Add("onlyDirectRoutes", "true")
 	quoteUrl.RawQuery = params.Encode()
-
 	fmt.Printf("Encoded URL is %q\n", quoteUrl.String())
 
 	resp, err := http.Get(quoteUrl.String())
@@ -105,22 +105,22 @@ func main() {
 	}
 	defer resp.Body.Close()
 
-	j := Quote{}
-	err = json.NewDecoder(resp.Body).Decode(&j)
+	quote := Quote{}
+	err = json.NewDecoder(resp.Body).Decode(&quote)
 	if err != nil {
 		panic(err)
 	}
+	fmt.Printf("%+v\n", quote)
 
-	fmt.Printf("%+v\n", j)
-
+	// Get the serialized transaction(s) from Jupiter's Swap API
 	swapUrl := "https://quote-api.jup.ag/v1/swap"
 
-	sr := SwapRequest{}
-	sr.Route = j.Routes[0]
-	sr.UserPublicKey = wallet.PublicKey().String()
+	swapReq := SwapRequest{}
+	swapReq.Route = quote.Routes[0]
+	swapReq.UserPublicKey = wallet.PublicKey().String()
 
 	var swapJsonBody bytes.Buffer
-	err = json.NewEncoder(&swapJsonBody).Encode(&sr)
+	err = json.NewEncoder(&swapJsonBody).Encode(&swapReq)
 	if err != nil {
 		panic(err)
 	}
@@ -131,20 +131,18 @@ func main() {
 	}
 	defer resp.Body.Close()
 
-	p := SwapResponse{}
-	err = json.NewDecoder(resp.Body).Decode(&p)
+	swapResp := SwapResponse{}
+	err = json.NewDecoder(resp.Body).Decode(&swapResp)
 	if err != nil {
 		panic(err)
 	}
+	fmt.Printf("%+v\n", swapResp)
 
-	fmt.Printf("%+v\n", p)
-
-	data, err := base64.StdEncoding.DecodeString(p.SwapTransaction)
+	swapTxRaw, err := base64.StdEncoding.DecodeString(swapResp.SwapTransaction)
 	if err != nil {
 		panic(err)
 	}
-
-	swapTx := solana.MustTransactionFromDecoder(bin.NewBinDecoder(data))
+	swapTx := solana.MustTransactionFromDecoder(bin.NewBinDecoder(swapTxRaw))
 
 	recentBlockhash, err := rpcClient.GetRecentBlockhash(context.TODO(), rpc.CommitmentFinalized)
 	if err != nil {
@@ -152,7 +150,7 @@ func main() {
 	}
 	swapTx.Message.RecentBlockhash = recentBlockhash.Value.Blockhash
 
-	// The serialized tx coming from Jupiter contains an invalid signature.
+	// The serialized tx coming from Jupiter doesn't yet have a valid signature.
 	swapTx.Signatures = []solana.Signature{}
 	_, err = swapTx.Sign(
 		func(key solana.PublicKey) *solana.PrivateKey {
@@ -162,11 +160,6 @@ func main() {
 			return nil
 		},
 	)
-	if err != nil {
-		panic(fmt.Errorf("unable to sign transaction: %w", err))
-	}
-
-	err = swapTx.VerifySignatures()
 	if err != nil {
 		panic(err)
 	}
