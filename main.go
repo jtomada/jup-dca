@@ -133,7 +133,6 @@ func main() {
 		panic(err)
 	}
 	defer resp.Body.Close()
-	fmt.Println("swapResp:", resp.Body)
 
 	swapResp := SwapResponse{}
 	err = json.NewDecoder(resp.Body).Decode(&swapResp)
@@ -150,7 +149,7 @@ func main() {
 	println("transaction count:", len(transactionBuffer))
 
 	for i, swapTx := range transactionBuffer {
-		recentBlockhash, err := rpcClient.GetRecentBlockhash(context.TODO(), rpc.CommitmentFinalized)
+		recentBlockhash, err := rpcClient.GetRecentBlockhash(context.TODO(), rpc.CommitmentConfirmed)
 		if err != nil {
 			panic(err)
 		}
@@ -170,11 +169,13 @@ func main() {
 			panic(err)
 		}
 
-		sig, err := confirm.SendAndConfirmTransaction(
+		sig, err := confirm.SendAndConfirmTransactionWithOpts(
 			context.TODO(),
 			rpcClient,
 			wsClient,
 			&swapTx,
+			true,
+			rpc.CommitmentConfirmed,
 		)
 		if err != nil {
 			panic(err)
