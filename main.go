@@ -20,17 +20,17 @@ import (
 )
 
 type SwapRequest struct {
-	Route Route `json:"route"`
-	//WrapUnwrapSOL bool   `json:"wrapUnwrapSOL"`
-	//FeeAccount    string `json:"feeAccount"`
-	//TokenLedger   string `json:"tokenLedger"`
+	Route         Route  `json:"route"`
+	WrapUnwrapSOL bool   `json:"wrapUnwrapSOL,omitempty"`
+	FeeAccount    string `json:"feeAccount,omitempty"`
+	TokenLedger   string `json:"tokenLedger,omitempty"`
 	UserPublicKey string `json:"userPublicKey"`
 }
 
 type SwapResponse struct {
-	//SetupTransaction   string `json:"setupTransaction"`
-	SwapTransaction string `json:"swapTransaction"`
-	//CleanupTransaction string `json:"cleanupTransaction"`
+	SetupTransaction   string `json:"setupTransaction,omitempty"`
+	SwapTransaction    string `json:"swapTransaction"`
+	CleanupTransaction string `json:"cleanupTransaction,omitempty"`
 }
 
 type Quote struct {
@@ -39,28 +39,28 @@ type Quote struct {
 }
 
 type Route struct {
-	InAmount              int          `json:"inAmount"`
-	OutAmount             int          `json:"outAmount"`
-	OutAmountWithSlippage int          `json:"outAmountWithSlippage"`
-	PriceImpactPct        int          `json:"priceImpactPct"`
+	InAmount              float64      `json:"inAmount"`
+	OutAmount             float64      `json:"outAmount"`
+	OutAmountWithSlippage float64      `json:"outAmountWithSlippage"`
+	PriceImpactPct        float64      `json:"priceImpactPct"`
 	MarketInfos           []MarketInfo `json:"marketInfos"`
 }
 
 type MarketInfo struct {
-	ID                 string `json:"id"`
-	Label              string `json:"label"`
-	InputMint          string `json:"inputMint"`
-	OutputMint         string `json:"outputMint"`
-	NotEnoughLiquidity bool   `json:"notEnoughLiquidity"`
-	InAmount           int    `json:"inAmount"`
-	OutAmount          int    `json:"outAmount"`
-	PriceImpactPct     int    `json:"priceImpactPct"`
-	LpFee              Fee    `json:"lpFee"`
-	PlatformFee        Fee    `json:"platformFee"`
+	ID                 string  `json:"id"`
+	Label              string  `json:"label"`
+	InputMint          string  `json:"inputMint"`
+	OutputMint         string  `json:"outputMint"`
+	NotEnoughLiquidity bool    `json:"notEnoughLiquidity"`
+	InAmount           float64 `json:"inAmount"`
+	OutAmount          float64 `json:"outAmount"`
+	PriceImpactPct     float64 `json:"priceImpactPct"`
+	LpFee              Fee     `json:"lpFee"`
+	PlatformFee        Fee     `json:"platformFee"`
 }
 
 type Fee struct {
-	Amount int     `json:"amount"`
+	Amount float64 `json:"amount"`
 	Mint   string  `json:"mint"`
 	Pct    float64 `json:"pct"`
 }
@@ -94,8 +94,9 @@ func main() {
 	params := url.Values{}
 	params.Add("inputMint", "So11111111111111111111111111111111111111112")
 	params.Add("outputMint", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
-	params.Add("amount", "1")
-	params.Add("onlyDirectRoutes", "true")
+	params.Add("amount", "1000")
+	params.Add("slippage", "1")
+	//params.Add("onlyDirectRoutes", "true")
 	quoteUrl.RawQuery = params.Encode()
 	fmt.Printf("Encoded URL is %q\n", quoteUrl.String())
 
@@ -138,41 +139,79 @@ func main() {
 	}
 	fmt.Printf("%+v\n", swapResp)
 
-	swapTxRaw, err := base64.StdEncoding.DecodeString(swapResp.SwapTransaction)
-	if err != nil {
-		panic(err)
-	}
-	swapTx := solana.MustTransactionFromDecoder(bin.NewBinDecoder(swapTxRaw))
-
-	recentBlockhash, err := rpcClient.GetRecentBlockhash(context.TODO(), rpc.CommitmentFinalized)
-	if err != nil {
-		panic(err)
-	}
-	swapTx.Message.RecentBlockhash = recentBlockhash.Value.Blockhash
-
-	// The serialized tx coming from Jupiter doesn't yet have a valid signature.
-	swapTx.Signatures = []solana.Signature{}
-	_, err = swapTx.Sign(
-		func(key solana.PublicKey) *solana.PrivateKey {
-			if wallet.PublicKey().Equals(key) {
-				return &wallet
-			}
-			return nil
-		},
-	)
+	transactionBuffer, err := swapResp.Decode()
 	if err != nil {
 		panic(err)
 	}
 
-	sig, err := confirm.SendAndConfirmTransaction(
-		context.TODO(),
-		rpcClient,
-		wsClient,
-		swapTx,
-	)
+	println("transaction count:", len(transactionBuffer))
+
+	for i, swapTx := range transactionBuffer {
+		recentBlockhash, err := rpcClient.GetRecentBlockhash(context.TODO(), rpc.CommitmentFinalized)
+		if err != nil {
+			panic(err)
+		}
+		swapTx.Message.RecentBlockhash = recentBlockhash.Value.Blockhash
+
+		// The serialized tx coming from Jupiter doesn't yet have a valid signature.
+		swapTx.Signatures = []solana.Signature{}
+		_, err = swapTx.Sign(
+			func(key solana.PublicKey) *solana.PrivateKey {
+				if wallet.PublicKey().Equals(key) {
+					return &wallet
+				}
+				return nil
+			},
+		)
+		if err != nil {
+			panic(err)
+		}
+
+		sig, err := confirm.SendAndConfirmTransaction(
+			context.TODO(),
+			rpcClient,
+			wsClient,
+			&swapTx,
+		)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println("tx signature:", i+1, sig.String())
+	}
+}
+
+func (sr *SwapResponse) Decode() (txs []solana.Transaction, err error) {
+	var transactionBuffer []solana.Transaction
+	if sr.SetupTransaction != "" {
+		tx, err := deserializeTx(sr.SetupTransaction)
+		if err != nil {
+			return nil, err
+		}
+		transactionBuffer = append(transactionBuffer, *tx)
+	}
+	if sr.SwapTransaction != "" {
+		tx, err := deserializeTx(sr.SwapTransaction)
+		if err != nil {
+			return nil, err
+		}
+		transactionBuffer = append(transactionBuffer, *tx)
+	}
+	if sr.CleanupTransaction != "" {
+		tx, err := deserializeTx(sr.CleanupTransaction)
+		if err != nil {
+			return nil, err
+		}
+		transactionBuffer = append(transactionBuffer, *tx)
+	}
+	return transactionBuffer, nil
+}
+
+func deserializeTx(base64Tx string) (tx *solana.Transaction, err error) {
+	swapTxRaw, err := base64.StdEncoding.DecodeString(base64Tx)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	fmt.Println("tx signature:", sig.String())
+	return solana.MustTransactionFromDecoder(bin.NewBinDecoder(swapTxRaw)), nil
 }
