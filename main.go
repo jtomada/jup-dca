@@ -83,23 +83,23 @@ func main() {
 	wallet := solana.MustPrivateKeyFromBase58(envWallet)
 	fmt.Println("wallet public key:", wallet.PublicKey().String())
 
-	base, err := url.Parse("https://quote-api.jup.ag")
+	quoteUrl, err := url.Parse("https://quote-api.jup.ag")
 	if err != nil {
 		panic(err)
 	}
 
-	base.Path += "/v1/quote"
+	quoteUrl.Path += "/v1/quote"
 
 	params := url.Values{}
 	params.Add("inputMint", "So11111111111111111111111111111111111111112")
 	params.Add("outputMint", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
 	params.Add("amount", "1")
 	params.Add("onlyDirectRoutes", "true")
-	base.RawQuery = params.Encode()
+	quoteUrl.RawQuery = params.Encode()
 
-	fmt.Printf("Encoded URL is %q\n", base.String())
+	fmt.Printf("Encoded URL is %q\n", quoteUrl.String())
 
-	resp, err := http.Get(base.String())
+	resp, err := http.Get(quoteUrl.String())
 	if err != nil {
 		panic(err)
 	}
@@ -113,12 +113,12 @@ func main() {
 
 	fmt.Printf("%+v\n", j)
 
-	httpposturl := "https://quote-api.jup.ag/v1/swap"
+	swapUrl := "https://quote-api.jup.ag/v1/swap"
 	sr := SwapRequest{}
 	sr.Route = j.Data[0]
 	sr.UserPublicKey = wallet.PublicKey().String()
 	srj, err := json.Marshal(sr)
-	req, err := http.NewRequest("POST", httpposturl, bytes.NewBuffer(srj))
+	req, err := http.NewRequest("POST", swapUrl, bytes.NewBuffer(srj))
 	req.Header.Set("X-Custom-Header", "myvalue")
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
