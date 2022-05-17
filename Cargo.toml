@@ -7,3 +7,9 @@ edition = "2021"
 
 [dependencies]
 jup-ag = "0.2.2"
+tokio = { version = "1", features = ["full"] }
+solana-client = "1.10"
+solana-sdk = "1.10"
+itertools = "0.10"
+spl-associated-token-account = "1"
+spl-token = "3"
