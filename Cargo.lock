@@ -1351,6 +1351,8 @@ version = "0.1.0"
 dependencies = [
  "itertools",
  "jup-ag",
+ "serde",
+ "serde_json",
  "solana-client",
  "solana-sdk",
  "spl-associated-token-account",

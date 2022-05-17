@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use serde::Deserialize;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
@@ -6,19 +7,20 @@ use solana_sdk::{
     signature::{read_keypair_file, Keypair, Signer},
 };
 use spl_token::{amount_to_ui_amount, ui_amount_to_amount};
+use std::fs::File;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = quote().await?; 
+    //let _ = quote().await?; 
     let _ = swap().await?;
 
     Ok(())
 }
 
 async fn quote() -> jup_ag::Result<()> {
-    let usdc = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
     let sol = pubkey!("So11111111111111111111111111111111111111112");
     let msol = pubkey!("mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So");
+    let usdc = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
     let ui_amount = 1.;
 
@@ -67,9 +69,31 @@ async fn quote() -> jup_ag::Result<()> {
     Ok(())
 }
 
+#[derive(Deserialize)]
+struct DcaJobs {
+    jobs: Vec<Job>,
+}
+
+#[derive(Deserialize)]
+struct Job {
+    input_mint: String,
+    output_mint: String,
+    amount: u32
+}
+
 async fn swap() -> Result<(), Box<dyn std::error::Error>> {
     let sol = pubkey!("So11111111111111111111111111111111111111112");
+    let sol_decimals = 9;
     let msol = pubkey!("mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So");
+    let usdc = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+    let usdc_decimals = 6;
+    let path = "./config.json";
+    let file = File::open(path)?;
+    let dca: DcaJobs = serde_json::from_reader(file)?;
+    for job in dca.jobs {
+        println!("in: {} out: {} amt: {}", job.input_mint, job.output_mint, job.amount);
+    }
+    
 
     let keypair = read_keypair_file("/home/jay/.config/solana/id.json").unwrap_or_else(|err| {
         println!("------------------------------------------------------------------------------------------------");
@@ -87,30 +111,32 @@ async fn swap() -> Result<(), Box<dyn std::error::Error>> {
         CommitmentConfig::confirmed(),
     );
 
-    let msol_token_address =
-        spl_associated_token_account::get_associated_token_address(&keypair.pubkey(), &msol);
+    let usdc_token_address =
+        spl_associated_token_account::get_associated_token_address(&keypair.pubkey(), &usdc);
     println!(
         "Pre-swap SOL balance: {}",
-        amount_to_ui_amount(rpc_client.get_balance(&keypair.pubkey()).await?, 9)
-    );
-    println!(
-        "Pre-swap mSOL balance: {}",
         amount_to_ui_amount(
+            rpc_client.get_balance(&keypair.pubkey()).await?, 
+            sol_decimals
+        )
+    );
+    let usdc_bal = amount_to_ui_amount(
             rpc_client
-                .get_token_account_balance(&msol_token_address)
+                .get_token_account_balance(&usdc_token_address)
                 .await?
                 .amount
                 .parse::<u64>()?,
-            9
-        )
+            usdc_decimals 
     );
+    println!(
+        "Pre-swap USDC balance: {}", usdc_bal);
 
     let slippage = 1.;
     let only_direct_routes = false;
     let quotes = jup_ag::quote(
+        usdc,
         sol,
-        msol,
-        ui_amount_to_amount(0.01, 9),
+        ui_amount_to_amount(0.01, usdc_decimals),
         only_direct_routes,
         Some(slippage),
         None,
@@ -118,7 +144,7 @@ async fn swap() -> Result<(), Box<dyn std::error::Error>> {
     .await?
     .data;
 
-    let quote = quotes.get(0).ok_or("No quotes found for SOL to mSOL")?;
+    let quote = quotes.get(0).ok_or("No quotes found for SOL to USDC")?;
 
     let route = quote
         .market_infos
@@ -126,11 +152,11 @@ async fn swap() -> Result<(), Box<dyn std::error::Error>> {
         .map(|market_info| market_info.label.clone())
         .join(", ");
     println!(
-        "Quote: {} SOL for {} mSOL via {} (worst case with slippage: {}). Impact: {:.2}%",
-        amount_to_ui_amount(quote.in_amount, 9),
-        amount_to_ui_amount(quote.out_amount, 9),
+        "Quote: {} USDC for {} SOL via {} (worst case with slippage: {}). Impact: {:.2}%",
+        amount_to_ui_amount(quote.in_amount, usdc_decimals),
+        amount_to_ui_amount(quote.out_amount, sol_decimals),
         route,
-        amount_to_ui_amount(quote.out_amount_with_slippage, 9),
+        amount_to_ui_amount(quote.out_amount_with_slippage, sol_decimals),
         quote.price_impact_pct * 100.
     );
 
@@ -147,6 +173,8 @@ async fn swap() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nTransactions to send: {}", transactions.len());
 
     for (i, mut transaction) in transactions.into_iter().enumerate() {
+        let (hash, _) = rpc_client.get_latest_blockhash_with_commitment(rpc_client.commitment()).await?;
+        transaction.message.recent_blockhash = hash;
         transaction.sign(&[&keypair], transaction.message.recent_blockhash);
         transaction.verify()?;
         println!(
@@ -168,17 +196,17 @@ async fn swap() -> Result<(), Box<dyn std::error::Error>> {
 
     println!(
         "Post-swap SOL balance: {}",
-        amount_to_ui_amount(rpc_client.get_balance(&keypair.pubkey()).await?, 9)
+        amount_to_ui_amount(rpc_client.get_balance(&keypair.pubkey()).await?, sol_decimals)
     );
     println!(
-        "Post-swap mSOL balance: {}",
+        "Post-swap USDC balance: {}",
         amount_to_ui_amount(
             rpc_client
-                .get_token_account_balance(&msol_token_address)
+                .get_token_account_balance(&usdc_token_address)
                 .await?
                 .amount
                 .parse::<u64>()?,
-            9
+            usdc_decimals 
         )
     );
 
