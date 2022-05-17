@@ -1,3 +1,5 @@
+use anyhow::Result;
+use delay_timer::prelude::*;
 use itertools::Itertools;
 use serde::Deserialize;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -7,14 +9,32 @@ use solana_sdk::{
     signature::{read_keypair_file, Keypair, Signer},
 };
 use spl_token::{amount_to_ui_amount, ui_amount_to_amount};
-use std::fs::File;
+use std::{fs::File, time::Duration};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    //let _ = quote().await?; 
-    let _ = swap().await?;
+    let delay_timer = DelayTimerBuilder::default().build();
+    let task_instance_chain = delay_timer.insert_task(build_task_async_print()?)?;
 
-    Ok(())
+    loop {
+        sleep_by_tokio(Duration::from_secs(5)).await;
+        println!("5 s have elapsed");
+    }
+
+    //let _ = quote().await?; 
+    //let _ = swap().await?;
+
+    //Ok(())
+}
+
+fn build_task_async_print() -> Result<Task, TaskError> {
+    let mut task_builder = TaskBuilder::default();
+
+    task_builder
+        .set_task_id(1)
+        .set_frequency_repeated_by_seconds(6)
+        .set_maximum_parallel_runnable_num(2)
+        .spawn_async_routine(quote)
 }
 
 async fn quote() -> jup_ag::Result<()> {
