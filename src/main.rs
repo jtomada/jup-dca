@@ -14,14 +14,42 @@ use std::{fs::File, time::Duration};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let delay_timer = DelayTimerBuilder::default().build();
-
+    let keypair = read_keypair_file("/home/jay/.config/solana/id.json").unwrap_or_else(|err| {
+        println!("------------------------------------------------------------------------------------------------");
+        println!("Failed to read `swap_example.json`: {}", err);
+        println!();
+        println!("An ephemeral keypair will be used instead. For a more realistic example, create a new keypair at");
+        println!("that location and fund it with a small amount of SOL.");
+        println!("------------------------------------------------------------------------------------------------");
+        println!();
+        Keypair::new()
+    });
+    let keypair_buf = keypair.to_bytes();
     let path = "./config.json";
     let file = File::open(path)?;
     let dca: DcaJobs = serde_json::from_reader(file)?;
 
     for job in dca.jobs {
         println!("in: {} out: {} amt: {}", job.input_mint, job.output_mint, job.amount);
-        let task = build_task_async_print(job)?;
+        let mut task_builder = TaskBuilder::default();
+        
+        let body = move || {
+            let j= job.clone();
+            let kp_buf =  keypair_buf.clone();
+            let kp = Keypair::from_bytes(&kp_buf).unwrap();
+            async move {
+                let _ = swap(
+                    j,
+                    kp,
+                ).await;
+            }
+        };
+
+        let task = task_builder
+            .set_task_id(1)
+            .set_frequency_repeated_by_seconds(60)
+            .set_maximum_parallel_runnable_num(2)
+            .spawn_async_routine(body)?;
         let _ = delay_timer.insert_task(task)?;
     }
 
@@ -29,23 +57,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         sleep_by_tokio(Duration::from_secs(5)).await;
         println!("5 s have elapsed");
     }
-}
-
-fn build_task_async_print(job: Job) -> Result<Task, TaskError> {
-    let mut task_builder = TaskBuilder::default();
-    
-    let body = move || {
-        let j= job.clone();
-        async move {
-            let _ = swap(j).await;
-        }
-    };
-
-    task_builder
-        .set_task_id(1)
-        .set_frequency_repeated_by_seconds(60)
-        .set_maximum_parallel_runnable_num(2)
-        .spawn_async_routine(body)
 }
 
 async fn quote() -> jup_ag::Result<()> {
@@ -110,27 +121,18 @@ struct Job {
     input_mint: String,
     output_mint: String,
     amount: u32,
-    slippage: u32,
 }
 
-async fn swap(job: Job) -> Result<(), Box<dyn std::error::Error>> {
+async fn swap(
+    job: Job,
+    keypair: Keypair,
+) -> Result<(), Box<dyn std::error::Error>> {
     let sol = pubkey!("So11111111111111111111111111111111111111112");
     let sol_decimals = 9;
     let msol = pubkey!("mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So");
     let usdc = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
     let usdc_decimals = 6;
-        
 
-    let keypair = read_keypair_file("/home/jay/.config/solana/id.json").unwrap_or_else(|err| {
-        println!("------------------------------------------------------------------------------------------------");
-        println!("Failed to read `swap_example.json`: {}", err);
-        println!();
-        println!("An ephemeral keypair will be used instead. For a more realistic example, create a new keypair at");
-        println!("that location and fund it with a small amount of SOL.");
-        println!("------------------------------------------------------------------------------------------------");
-        println!();
-        Keypair::new()
-    });
 
     let rpc_client = RpcClient::new_with_commitment(
         "https://solana-api.projectserum.com".into(),
