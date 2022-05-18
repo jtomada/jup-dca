@@ -36,14 +36,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let kp_buf =  keypair_buf.clone();
             let kp = Keypair::from_bytes(&kp_buf).unwrap();
 
-            let output_mint = Pubkey::try_from("So11111111111111111111111111111111111111112").unwrap();
             let input_mint = Pubkey::try_from("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap();
+            let output_mint = Pubkey::try_from("So11111111111111111111111111111111111111112").unwrap();
+            let ui_amount = job.amount.clone();
 
             async move {
                 let _ = swap(
                     input_mint,
                     output_mint,
-                    0.01,
+                    ui_amount,
                     1.0,
                     kp,
                 )
@@ -75,7 +76,7 @@ struct DcaJobs {
 struct Job {
     input_mint: String,
     output_mint: String,
-    amount: u32,
+    amount: f64,
 }
 
 async fn swap(
@@ -121,12 +122,6 @@ async fn swap(
     let in_bal= in_ui_token.token_amount.ui_amount.unwrap();
     println!("Pre-swap USDC balance: {}", in_bal);
     
-    let data = jup_ag::price(input_mint, output_mint, ui_amount).await?.data;
-    println!(
-        "Price for {} {} is {} {}",
-        data.amount, data.input_symbol, data.price, data.output_symbol
-    );
-
     let only_direct_routes = false;
     let quotes = jup_ag::quote(
         input_mint,
@@ -142,24 +137,6 @@ async fn swap(
     let quote = quotes.get(0).ok_or("No quotes found for SOL to USDC")?;
 
     println!("Received {} quotes:", quotes.len());
-    for (i, quote) in quotes.clone().into_iter().enumerate() {
-        let route = quote
-            .market_infos
-            .iter()
-            .map(|market_info| market_info.label.clone())
-            .join(", ");
-        println!(
-            "{}. {} {} for {} {} via {} (worst case with slippage: {}). Impact: {:.2}%",
-            i,
-            amount_to_ui_amount(quote.in_amount, in_decimals),
-            data.input_symbol,
-            amount_to_ui_amount(quote.out_amount, out_decimals),
-            data.output_symbol,
-            route,
-            amount_to_ui_amount(quote.out_amount_with_slippage, out_decimals),
-            quote.price_impact_pct * 100.
-        );
-    }
     println!();
 
     let route = quote
@@ -167,6 +144,7 @@ async fn swap(
         .iter()
         .map(|market_info| market_info.label.clone())
         .join(", ");
+
     println!(
         "Quote: {} USDC for {} SOL via {} (worst case with slippage: {}). Impact: {:.2}%",
         amount_to_ui_amount(quote.in_amount, in_decimals),
@@ -189,25 +167,22 @@ async fn swap(
     println!("\nTransactions to send: {}", transactions.len());
 
     for (i, mut transaction) in transactions.into_iter().enumerate() {
-        let (hash, _) = rpc_client.get_latest_blockhash_with_commitment(rpc_client.commitment()).await?;
-        transaction.message.recent_blockhash = hash;
+        transaction.message.recent_blockhash = rpc_client.get_latest_blockhash().await.expect("error get_latest_blockhash");
         transaction.sign(&[&keypair], transaction.message.recent_blockhash);
         transaction.verify()?;
-        println!(
-            "Simulating transaction {}: {}",
-            i + 1,
-            transaction.signatures[0]
-        );
-        let response = rpc_client.simulate_transaction(&transaction).await?;
-        println!("  {:#?}", response.value);
         println!(
             "Sending transaction {}: {}",
             i + 1,
             transaction.signatures[0]
         );
-        let _ = rpc_client
+        let signature = rpc_client
             .send_and_confirm_transaction_with_spinner(&transaction)
-            .await?;
+            .await.expect("error send_and_confirm_tx");
+        println!(
+            "TX signature: {}: {}",
+            i + 1,
+            signature
+        )
     }
 
     println!(
