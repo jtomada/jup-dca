@@ -14,27 +14,38 @@ use std::{fs::File, time::Duration};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let delay_timer = DelayTimerBuilder::default().build();
-    let task_instance_chain = delay_timer.insert_task(build_task_async_print()?)?;
+
+    let path = "./config.json";
+    let file = File::open(path)?;
+    let dca: DcaJobs = serde_json::from_reader(file)?;
+
+    for job in dca.jobs {
+        println!("in: {} out: {} amt: {}", job.input_mint, job.output_mint, job.amount);
+        let task = build_task_async_print(job)?;
+        let _ = delay_timer.insert_task(task)?;
+    }
 
     loop {
         sleep_by_tokio(Duration::from_secs(5)).await;
         println!("5 s have elapsed");
     }
-
-    //let _ = quote().await?; 
-    //let _ = swap().await?;
-
-    //Ok(())
 }
 
-fn build_task_async_print() -> Result<Task, TaskError> {
+fn build_task_async_print(job: Job) -> Result<Task, TaskError> {
     let mut task_builder = TaskBuilder::default();
+    
+    let body = move || {
+        let j= job.clone();
+        async move {
+            let _ = swap(j).await;
+        }
+    };
 
     task_builder
         .set_task_id(1)
-        .set_frequency_repeated_by_seconds(6)
+        .set_frequency_repeated_by_seconds(60)
         .set_maximum_parallel_runnable_num(2)
-        .spawn_async_routine(quote)
+        .spawn_async_routine(body)
 }
 
 async fn quote() -> jup_ag::Result<()> {
@@ -94,26 +105,21 @@ struct DcaJobs {
     jobs: Vec<Job>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct Job {
     input_mint: String,
     output_mint: String,
-    amount: u32
+    amount: u32,
+    slippage: u32,
 }
 
-async fn swap() -> Result<(), Box<dyn std::error::Error>> {
+async fn swap(job: Job) -> Result<(), Box<dyn std::error::Error>> {
     let sol = pubkey!("So11111111111111111111111111111111111111112");
     let sol_decimals = 9;
     let msol = pubkey!("mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So");
     let usdc = pubkey!("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
     let usdc_decimals = 6;
-    let path = "./config.json";
-    let file = File::open(path)?;
-    let dca: DcaJobs = serde_json::from_reader(file)?;
-    for job in dca.jobs {
-        println!("in: {} out: {} amt: {}", job.input_mint, job.output_mint, job.amount);
-    }
-    
+        
 
     let keypair = read_keypair_file("/home/jay/.config/solana/id.json").unwrap_or_else(|err| {
         println!("------------------------------------------------------------------------------------------------");
