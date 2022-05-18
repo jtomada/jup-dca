@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .set_maximum_parallel_runnable_num(2)
             .spawn_async_routine(body)?;
 
-        let _ = delay_timer.insert_task(task)?;
+        delay_timer.add_task(task)?;
     }
 
     loop {
@@ -107,7 +107,7 @@ async fn swap(
             &keypair.pubkey(), 
             &output_mint
         );
-    let out_ui_token = rpc_client.get_token_account(&out_token_address).await?.unwrap();    
+    let out_ui_token = rpc_client.get_token_account(&out_token_address).await.expect("err get_token_acc").unwrap();    
     let out_decimals = out_ui_token.token_amount.decimals;
     let out_bal = out_ui_token.token_amount.ui_amount.unwrap();
     println!("Pre-swap output token balance: {}", out_bal);
@@ -117,7 +117,7 @@ async fn swap(
             &keypair.pubkey(), 
             &input_mint
         );
-    let in_ui_token = rpc_client.get_token_account(&in_token_address).await?.unwrap(); 
+    let in_ui_token = rpc_client.get_token_account(&in_token_address).await.expect("err get_token_acc").unwrap(); 
     let in_decimals = in_ui_token.token_amount.decimals;
     let in_bal= in_ui_token.token_amount.ui_amount.unwrap();
     println!("Pre-swap USDC balance: {}", in_bal);
@@ -131,7 +131,8 @@ async fn swap(
         Some(slippage),
         None,
     )
-    .await?
+    .await
+    .expect("error getting quote")
     .data;
 
     let quote = quotes.get(0).ok_or("No quotes found for SOL to USDC")?;
@@ -158,7 +159,7 @@ async fn swap(
         setup,
         swap,
         cleanup,
-    } = jup_ag::swap(quote.clone(), keypair.pubkey()).await?;
+    } = jup_ag::swap(quote.clone(), keypair.pubkey()).await.expect("error getting swap");
 
     let transactions = [setup, Some(swap), cleanup]
         .into_iter()
@@ -169,7 +170,6 @@ async fn swap(
     for (i, mut transaction) in transactions.into_iter().enumerate() {
         transaction.message.recent_blockhash = rpc_client.get_latest_blockhash().await.expect("error get_latest_blockhash");
         transaction.sign(&[&keypair], transaction.message.recent_blockhash);
-        transaction.verify()?;
         println!(
             "Sending transaction {}: {}",
             i + 1,
