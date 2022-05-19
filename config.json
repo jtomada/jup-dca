@@ -3,22 +3,26 @@
         {
             "input_mint": "SOL",
             "output_mint": "USDC",
-            "amount": 0.0027
+            "amount": 0.0027,
+            "cron": "0 */1 * ? * *"
         },
         {
             "input_mint": "SOL",
             "output_mint": "USDC",
-            "amount": 0.0047
+            "amount": 0.0047,
+            "cron": "0 */1 * ? * *"
         },
         {
             "input_mint": "SOL",
             "output_mint": "USDC",
-            "amount": 0.0064 
+            "amount": 0.0064,
+            "cron": "0 */1 * ? * *"
         },
         {
             "input_mint": "SOL",
             "output_mint": "USDC",
-            "amount": 0.0093 
+            "amount": 0.0093,
+            "cron": "0 */1 * ? * *"
         }
     ]
 }

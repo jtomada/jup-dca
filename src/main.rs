@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let usdc_mint = Pubkey::try_from("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap();
             let _msol_mint = Pubkey::try_from("mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So").unwrap();
             let sol_mint = Pubkey::try_from("So11111111111111111111111111111111111111112").unwrap();
-           let ui_amount = job.amount.clone();
+            let ui_amount = job.amount.clone();
 
             async move {
                 let _ = swap(
@@ -62,10 +62,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         println!("Building task {}", i + 1);
+        println!("cron str {}", &job.cron);
 
-        let task = task_builder
+        let task = TaskBuilder::default()
             .set_task_id(i.try_into().unwrap())
-            .set_frequency_repeated_by_seconds(60)
+            .set_frequency_repeated_by_cron_str(&job.cron)
             .spawn_async_routine(body)?;
 
         delay_timer.add_task(task)?;
@@ -74,7 +75,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     loop {
         sleep_by_tokio(Duration::from_secs(5)).await;
-        println!("5 s have elapsed");
     }
 }
 
@@ -88,6 +88,7 @@ struct Job {
     input_mint: String,
     output_mint: String,
     amount: f64,
+    cron: String,
 }
 
 async fn swap(
