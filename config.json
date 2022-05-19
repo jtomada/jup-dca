@@ -3,7 +3,22 @@
         {
             "input_mint": "SOL",
             "output_mint": "USDC",
-            "amount": 0.01 
+            "amount": 0.0027
+        },
+        {
+            "input_mint": "SOL",
+            "output_mint": "USDC",
+            "amount": 0.0047
+        },
+        {
+            "input_mint": "SOL",
+            "output_mint": "USDC",
+            "amount": 0.0064 
+        },
+        {
+            "input_mint": "SOL",
+            "output_mint": "USDC",
+            "amount": 0.0093 
         }
     ]
 }
