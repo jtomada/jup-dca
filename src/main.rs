@@ -99,7 +99,7 @@ async fn swap(
     keypair: Keypair,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let rpc_client = RpcClient::new_with_commitment(
-        "https://solana-api.projectserum.com".into(),
+        "https://ssc-dao.genesysgo.net/".into(),
         CommitmentConfig::confirmed(),
     );
 
@@ -122,9 +122,7 @@ async fn swap(
         &out_token_address
     )
     .await
-    .expect(
-        "err get_token_acc"
-    )
+    .expect("err get_token_acc")
     .unwrap();    
     let out_decimals = out_token_acc.token_amount.decimals;
     let out_bal = out_token_acc.token_amount.ui_amount.unwrap();
@@ -139,9 +137,7 @@ async fn swap(
         &in_token_address
     )
     .await
-    .expect(
-        "err get_token_acc"
-    )
+    .expect("err get_token_acc")
     .unwrap(); 
     let in_decimals = in_token_acc.token_amount.decimals;
     let in_bal= in_token_acc.token_amount.ui_amount.unwrap();
