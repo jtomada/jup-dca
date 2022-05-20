@@ -16,24 +16,16 @@ use spl_token::{
     native_mint
 };
 use std::{fs::File, time::Duration}; 
-use std::collections::HashMap;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _mint_addresses = HashMap::from([
-        ("SOL", "So11111111111111111111111111111111111111112"),
-        ("USDC", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-        ("mSOL", "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So"),
-    ]);
-    let usdc_mint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-    let msol_mint = "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So";
-    let sol_mint = "So11111111111111111111111111111111111111112";
-
     let delay_timer = DelayTimerBuilder::default().build();
+
     let keypair = read_keypair_file(
         "/home/jay/.config/solana/id.json"
     )?;
     let keypair_buf = keypair.to_bytes();
+
     let path = "./config.json";
     let file = File::open(path)?;
     let dca: DcaJobs = serde_json::from_reader(file)?;
@@ -50,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = maybe_init_token_account(
             &rpc_client,
             &keypair,
-            Pubkey::try_from(msol_mint)?
+            Pubkey::try_from(job.output_mint.as_str())?,
         )
         .await?;
         
@@ -58,8 +50,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let kp_buf =  keypair_buf.clone();
             let kp = Keypair::from_bytes(&kp_buf).unwrap();
-            let input_mint = Pubkey::try_from(usdc_mint).expect("error parsing input mint");
-            let output_mint = Pubkey::try_from(sol_mint).expect("error parsing output mint");
+            let input_mint = Pubkey::try_from(job.input_mint.as_str()).expect("error parsing input mint");
+            let output_mint = Pubkey::try_from(job.output_mint.as_str()).expect("error parsing output mint");
             let ui_amount = job.amount.clone();
 
             async move {
@@ -71,7 +63,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     false,
                     kp,
                 )
-                .await;
+                .await
+                .expect("error getting swap");
             }
         };
 
@@ -166,7 +159,7 @@ async fn swap(
     slippage: f64,
     only_direct_routes: bool,
     keypair: Keypair,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     let rpc_client = RpcClient::new_with_commitment(
         "https://ssc-dao.genesysgo.net/".into(),
         CommitmentConfig::confirmed(),
@@ -278,7 +271,7 @@ async fn swap(
             transaction.signatures[0]
         );
         let signature = rpc_client
-            .send_and_confirm_transaction_with_spinner(&transaction)
+            .send_and_confirm_transaction(&transaction)
             .await
             .expect("error send_and_confirm_tx");
         println!(
@@ -287,6 +280,7 @@ async fn swap(
             signature
         )
     }
+
 
     println!(
         "Post-swap SOL balance: {}",
