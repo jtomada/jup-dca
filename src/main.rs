@@ -7,7 +7,9 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
     signature::{read_keypair_file, Keypair, Signer},
+    transaction::Transaction,
 };
+use spl_associated_token_account::*;
 use spl_token::{
     amount_to_ui_amount, 
     ui_amount_to_amount,
@@ -24,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("mSOL", "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So"),
     ]);
     let usdc_mint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-    let _msol_mint = "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So";
+    let msol_mint = "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So";
     let sol_mint = "So11111111111111111111111111111111111111112";
 
     let delay_timer = DelayTimerBuilder::default().build();
@@ -40,7 +42,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for job in jobs {
         println!("in: {} out: {} amt: {}", job.input_mint, job.output_mint, job.amount);
-        let mut task_builder = TaskBuilder::default();
+        let rpc_client = RpcClient::new_with_commitment(
+            "https://ssc-dao.genesysgo.net/".into(),
+            CommitmentConfig::confirmed(),
+        );
+
+        let _ = maybe_init_token_account(
+            &rpc_client,
+            &keypair,
+            Pubkey::try_from(msol_mint)?
+        )
+        .await?;
         
         let body = move || {
 
@@ -91,6 +103,60 @@ struct Job {
     output_mint: String,
     amount: f64,
     cron: String,
+}
+
+async fn maybe_init_token_account(
+    rpc_client: &RpcClient,
+    keypair: &Keypair,
+    mint: Pubkey,
+) -> Result<()> {
+    let token_address = get_associated_token_address(
+        &keypair.pubkey(), 
+        &mint
+    );
+
+    let token_acc = rpc_client.get_token_account(
+        &token_address
+    )
+    .await;
+
+    let token_acc = match token_acc {
+        // check error type
+        Ok(t) => t,
+        Err(err) => {
+            let create_ata_ix = instruction::create_associated_token_account(
+                &keypair.pubkey(),
+                &keypair.pubkey(),
+                &mint
+            );
+            
+            let blockhash = rpc_client.get_latest_blockhash().await?;
+            let transaction = Transaction::new_signed_with_payer(
+                &[create_ata_ix],
+                Some(&keypair.pubkey()),
+                &[keypair],
+                blockhash,
+            );
+            println!(
+                "Sending transaction: {}",
+                transaction.signatures[0]
+            );
+            let signature = rpc_client
+                .send_and_confirm_transaction_with_spinner(&transaction)
+                .await?;
+            println!(
+                "TX signature: {}",
+                signature
+            );
+            let token_acc = rpc_client.get_token_account(
+                &token_address
+            )
+            .await?;
+            token_acc
+        }
+    };
+        
+    Ok(())
 }
 
 async fn swap(
