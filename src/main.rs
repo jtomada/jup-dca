@@ -288,7 +288,7 @@ async fn swap(
             .get_balance(&keypair.pubkey())
             .await
             .expect("err post swap sol balance"), 
-            out_decimals
+            native_mint::DECIMALS,
         )
     );
     println!(
@@ -301,7 +301,7 @@ async fn swap(
             .amount
             .parse::<u64>()
             .expect("err parsing post out balance"),
-            in_decimals 
+            in_decimals, 
         )
     );
 
