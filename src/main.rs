@@ -168,8 +168,7 @@ async fn swap(
         rpc_client.get_balance(
             &keypair.pubkey()
         )
-        .await
-        .expect("error getting sol balance"), 
+        .await?,
         native_mint::DECIMALS 
     );
     println!("Pre-swap SOL balance: {}", sol_balance);
@@ -182,8 +181,7 @@ async fn swap(
     let out_token_acc = rpc_client.get_token_account(
         &out_token_address
     )
-    .await
-    .expect("err get_token_acc")
+    .await?
     .unwrap();    
     let out_decimals = out_token_acc.token_amount.decimals;
     let out_bal = out_token_acc.token_amount.ui_amount.unwrap();
@@ -197,8 +195,7 @@ async fn swap(
     let in_token_acc = rpc_client.get_token_account(
         &in_token_address
     )
-    .await
-    .expect("err get_token_acc")
+    .await?
     .unwrap(); 
     let in_decimals = in_token_acc.token_amount.decimals;
     let in_bal= in_token_acc.token_amount.ui_amount.unwrap();
@@ -212,14 +209,10 @@ async fn swap(
         Some(slippage),
         None,
     )
-    .await
-    .expect("error getting quote")
+    .await?
     .data;
 
     let quote = quotes.get(0).expect("No quotes found for SOL to USDC");
-
-    println!("Received {} quotes:", quotes.len());
-    println!();
 
     let route = quote
         .market_infos
@@ -244,8 +237,7 @@ async fn swap(
         quote.clone(), 
         keypair.pubkey()
     )
-    .await
-    .expect("error getting swap");
+    .await?;
 
     let transactions = [setup, Some(swap), cleanup]
         .into_iter()
@@ -258,8 +250,7 @@ async fn swap(
         .enumerate() {
         transaction.message.recent_blockhash = rpc_client
             .get_latest_blockhash()
-            .await
-            .expect("error get_latest_blockhash");
+            .await?;
         transaction.sign(
             &[&keypair], 
             transaction.message.recent_blockhash
@@ -271,8 +262,7 @@ async fn swap(
         );
         let signature = rpc_client
             .send_and_confirm_transaction(&transaction)
-            .await
-            .expect("error send_and_confirm_tx");
+            .await?;
         println!(
             "TX signature: {}: {}",
             i + 1,
@@ -286,8 +276,7 @@ async fn swap(
         amount_to_ui_amount(
             rpc_client
             .get_balance(&keypair.pubkey())
-            .await
-            .expect("err post swap sol balance"), 
+            .await?,
             native_mint::DECIMALS,
         )
     );
@@ -296,11 +285,9 @@ async fn swap(
         amount_to_ui_amount(
             rpc_client
             .get_token_account_balance(&in_token_address)
-            .await
-            .expect("err post out balance")
+            .await?
             .amount
-            .parse::<u64>()
-            .expect("err parsing post out balance"),
+            .parse::<u64>()?,
             in_decimals, 
         )
     );
