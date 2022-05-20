@@ -13,7 +13,7 @@ use spl_token::{
     ui_amount_to_amount,
     native_mint
 };
-use std::{fs::File, time::Duration};
+use std::{fs::File, time::Duration}; 
 use std::collections::HashMap;
 
 #[tokio::main]
@@ -23,6 +23,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("USDC", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
         ("mSOL", "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So"),
     ]);
+    let usdc_mint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    let _msol_mint = "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So";
+    let sol_mint = "So11111111111111111111111111111111111111112";
+
     let delay_timer = DelayTimerBuilder::default().build();
     let keypair = read_keypair_file(
         "/home/jay/.config/solana/id.json"
@@ -42,16 +46,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let kp_buf =  keypair_buf.clone();
             let kp = Keypair::from_bytes(&kp_buf).unwrap();
-
-            let usdc_mint = Pubkey::try_from("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap();
-            let _msol_mint = Pubkey::try_from("mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So").unwrap();
-            let sol_mint = Pubkey::try_from("So11111111111111111111111111111111111111112").unwrap();
+            let input_mint = Pubkey::try_from(usdc_mint).expect("error parsing input mint");
+            let output_mint = Pubkey::try_from(sol_mint).expect("error parsing output mint");
             let ui_amount = job.amount.clone();
 
             async move {
                 let _ = swap(
-                    usdc_mint,
-                    sol_mint,
+                    input_mint,
+                    output_mint,
                     ui_amount,
                     1.0,
                     false,
