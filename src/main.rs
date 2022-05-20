@@ -1,5 +1,6 @@
 use anyhow::Result;
 use delay_timer::prelude::*;
+use dotenv;
 use itertools::Itertools;
 use serde::Deserialize;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -19,10 +20,10 @@ use std::{fs::File, time::Duration};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let delay_timer = DelayTimerBuilder::default().build();
+    dotenv::dotenv().ok();
 
     let keypair = read_keypair_file(
-        "/home/jay/.config/solana/id.json"
+        dotenv::var("WALLET_PRIVATE_KEY").unwrap(),
     )?;
     let keypair_buf = keypair.to_bytes();
 
@@ -31,6 +32,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dca: DcaJobs = serde_json::from_reader(file)?;
     let jobs = dca.jobs;
     let mut i = 0;
+
+    let delay_timer = DelayTimerBuilder::default().build();
 
     for job in jobs {
         println!("in: {} out: {} amt: {}", job.input_mint, job.output_mint, job.amount);
