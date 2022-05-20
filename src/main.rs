@@ -113,10 +113,9 @@ async fn maybe_init_token_account(
     )
     .await;
 
-    let token_acc = match token_acc {
+    match token_acc {
         // check error type
-        Ok(t) => t,
-        Err(err) => {
+        Err(_) => {
             let create_ata_ix = instruction::create_associated_token_account(
                 &keypair.pubkey(),
                 &keypair.pubkey(),
@@ -141,12 +140,12 @@ async fn maybe_init_token_account(
                 "TX signature: {}",
                 signature
             );
-            let token_acc = rpc_client.get_token_account(
+            let _ = rpc_client.get_token_account(
                 &token_address
             )
             .await?;
-            token_acc
         }
+        _ => {}
     };
         
     Ok(())
@@ -217,7 +216,7 @@ async fn swap(
     .expect("error getting quote")
     .data;
 
-    let quote = quotes.get(0).ok_or("No quotes found for SOL to USDC")?;
+    let quote = quotes.get(0).expect("No quotes found for SOL to USDC");
 
     println!("Received {} quotes:", quotes.len());
     println!();
